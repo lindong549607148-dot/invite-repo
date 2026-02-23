@@ -5,6 +5,7 @@ const inviteService = require('../services/inviteService');
 const taskView = require('../services/taskView');
 const payoutLedgerService = require('../services/payoutLedgerService');
 const featureFlags = require('../config/featureFlags');
+const orderService = require('../services/orderService');
 
 function requireBody(req, res, keys, next) {
   const missing = keys.filter((k) => req.body[k] === undefined || req.body[k] === '');
@@ -16,7 +17,22 @@ function requireBody(req, res, keys, next) {
 
 router.get('/refund/list', (req, res, next) => {
   const list = inviteService.getPendingPayoutTasks();
-  res.json(ok(list));
+  const enriched = list.map((task) => {
+    const order = task.orderId ? orderService.getOrder(task.orderId) : null;
+    const amount = order ? order.amount : null;
+    const riskLevel = task.riskLevel || payoutLedgerService.computeRisk(task).level || null;
+    const ledger = payoutLedgerService.getLedgerSummary(task.taskId);
+    return {
+      ...task,
+      amount,
+      riskLevel,
+      payoutStatus: ledger ? ledger.payoutStatus : null,
+      qualifiedAt: (ledger && ledger.qualifiedAt) || task.qualifiedAt || null,
+      payoutAt: (ledger && ledger.payoutAt) || task.payoutAt || null,
+      createdAt: task.createdAt,
+    };
+  });
+  res.json(ok(enriched));
 });
 
 router.get('/tasks/detail', (req, res, next) => {
