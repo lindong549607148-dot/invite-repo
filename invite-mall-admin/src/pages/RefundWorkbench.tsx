@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { refundList, refundApprove, refundReject, type RefundTaskItem } from '@/api/admin'
 import { taskDetail, type TaskDetail } from '@/api/taskDetail'
 
@@ -8,10 +8,23 @@ const RISK_COLORS: Record<string, string> = {
   HIGH: 'bg-red-100 text-red-700',
 }
 
+/** amount 单位分 → 元显示，空则 "—" */
+function formatAmount(cents: number | null | undefined): string {
+  if (cents == null || !Number.isFinite(Number(cents))) return '—'
+  return (Number(cents) / 100).toFixed(2)
+}
+
 function formatDate(v: string | number | null | undefined): string {
   if (v == null) return '—'
   if (typeof v === 'number') return new Date(v).toISOString().slice(0, 19).replace('T', ' ')
   return String(v).slice(0, 19).replace('T', ' ')
+}
+
+function getDefaultBatchNote(): string {
+  const yyyy = new Date().getFullYear()
+  const mm = String(new Date().getMonth() + 1).padStart(2, '0')
+  const dd = String(new Date().getDate()).padStart(2, '0')
+  return `auto-ok-${yyyy}${mm}${dd}`
 }
 
 export default function RefundWorkbench() {
@@ -24,6 +37,12 @@ export default function RefundWorkbench() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [riskLevelFilter, setRiskLevelFilter] = useState<string>('All')
+  const [payoutStatusFilter, setPayoutStatusFilter] = useState<string>('All')
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
+  const [batchModalOpen, setBatchModalOpen] = useState(false)
+  const [batchNote, setBatchNote] = useState('')
+  const [batchSubmitting, setBatchSubmitting] = useState(false)
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -44,6 +63,108 @@ export default function RefundWorkbench() {
   useEffect(() => {
     loadList()
   }, [loadList])
+
+  // TODO: switch to server-side filtering when refund/list supports query params
+  const filteredList = useMemo(() => {
+    return list.filter((row) => {
+      if (riskLevelFilter !== 'All' && row.riskLevel !== riskLevelFilter) return false
+      if (payoutStatusFilter !== 'All' && row.payoutStatus !== payoutStatusFilter) return false
+      return true
+    })
+  }, [list, riskLevelFilter, payoutStatusFilter])
+
+  const uniquePayoutStatuses = useMemo(() => {
+    const set = new Set<string>()
+    list.forEach((r) => {
+      if (r.payoutStatus) set.add(r.payoutStatus)
+    })
+    return Array.from(set).sort()
+  }, [list])
+
+  const pendingInFiltered = useMemo(
+    () => filteredList.filter((r) => r.status === 'PENDING_PAYOUT'),
+    [filteredList]
+  )
+  const allPendingSelected =
+    pendingInFiltered.length > 0 &&
+    pendingInFiltered.every((r) => selectedTaskIds.has(r.taskId))
+
+  const toggleSelect = (taskId: string, status: string) => {
+    if (status !== 'PENDING_PAYOUT') return
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(taskId)) next.delete(taskId)
+      else next.add(taskId)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (allPendingSelected) {
+      setSelectedTaskIds((prev) => {
+        const next = new Set(prev)
+        pendingInFiltered.forEach((r) => next.delete(r.taskId))
+        return next
+      })
+    } else {
+      setSelectedTaskIds((prev) => {
+        const next = new Set(prev)
+        pendingInFiltered.forEach((r) => next.add(r.taskId))
+        return next
+      })
+    }
+  }
+
+  const openBatchModal = () => {
+    const pendingSelected = Array.from(selectedTaskIds).filter((id) =>
+      list.some((r) => r.taskId === id && r.status === 'PENDING_PAYOUT')
+    )
+    if (pendingSelected.length === 0) {
+      showToast('请至少选择一项待审核任务（仅 PENDING_PAYOUT 可勾选）')
+      return
+    }
+    setBatchNote(getDefaultBatchNote())
+    setBatchModalOpen(true)
+  }
+
+  const handleBatchApprove = async () => {
+    const trimmed = batchNote.trim()
+    if (!trimmed) {
+      showToast('请填写批量审核备注')
+      return
+    }
+    const ids = Array.from(selectedTaskIds).filter((id) =>
+      list.some((r) => r.taskId === id && r.status === 'PENDING_PAYOUT')
+    )
+    if (ids.length === 0) {
+      showToast('没有可批量通过的任务')
+      setBatchModalOpen(false)
+      return
+    }
+    setBatchSubmitting(true)
+    let okCount = 0
+    let failCount = 0
+    for (const taskId of ids) {
+      try {
+        await refundApprove(taskId, trimmed)
+        okCount += 1
+      } catch {
+        failCount += 1
+      }
+    }
+    setBatchSubmitting(false)
+    setBatchModalOpen(false)
+    setSelectedTaskIds(new Set())
+    loadList()
+    if (failCount === 0) {
+      showToast(`批量通过完成：成功 ${okCount} 条`)
+    } else if (okCount > 0) {
+      showToast(`批量通过完成：成功 ${okCount} 条，失败 ${failCount} 条`)
+    } else {
+      showToast('批量通过失败，请重试')
+    }
+    // TODO: 批量拒绝
+  }
 
   const openDetail = (taskId: string) => {
     setDetailTaskId(taskId)
@@ -133,59 +254,125 @@ export default function RefundWorkbench() {
             <p className="text-sm text-gray-400 mt-1">当有任务进入待结算状态后会出现在这里</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-xhs-pink-bg border-b border-xhs-pink-soft">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">taskId</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">taskNo</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">userId</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">amount</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">riskLevel</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">payoutStatus</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">createdAt</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((row) => (
-                  <tr
-                    key={row.taskId}
-                    className="border-b border-gray-100 hover:bg-xhs-pink-bg/50 transition-colors"
-                  >
-                    <td className="py-3 px-4 font-mono text-sm text-gray-800">{row.taskId}</td>
-                    <td className="py-3 px-4 text-gray-700">{row.taskNo}</td>
-                    <td className="py-3 px-4 text-gray-600">{row.userId}</td>
-                    <td className="py-3 px-4 text-gray-600">{row.amount != null ? `¥${row.amount}` : '—'}</td>
-                    <td className="py-3 px-4">
-                      {row.riskLevel ? (
-                        <span
-                          className={`inline-flex px-2 py-1 rounded-lg text-xs font-medium ${
-                            RISK_COLORS[row.riskLevel] ?? 'bg-gray-100 text-gray-600'
-                          }`}
-                        >
-                          {row.riskLevel}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">{row.payoutStatus ?? '—'}</td>
-                    <td className="py-3 px-4 text-gray-500 text-sm">{formatDate(row.createdAt)}</td>
-                    <td className="py-3 px-4">
-                      <button
-                        type="button"
-                        onClick={() => openDetail(row.taskId)}
-                        className="text-sm text-xhs-pink hover:text-xhs-rose font-medium"
-                      >
-                        查看详情
-                      </button>
-                    </td>
-                  </tr>
+          <>
+            <div className="flex flex-wrap items-center gap-4 p-4 border-b border-xhs-pink-soft bg-xhs-pink-bg/50">
+              <span className="text-sm text-gray-600">riskLevel</span>
+              <select
+                value={riskLevelFilter}
+                onChange={(e) => setRiskLevelFilter(e.target.value)}
+                className="rounded-button border border-gray-200 px-3 py-1.5 text-sm text-gray-800 bg-white focus:border-xhs-pink outline-none"
+              >
+                <option value="All">All</option>
+                <option value="LOW">LOW</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="HIGH">HIGH</option>
+              </select>
+              <span className="text-sm text-gray-600 ml-2">payoutStatus</span>
+              <select
+                value={payoutStatusFilter}
+                onChange={(e) => setPayoutStatusFilter(e.target.value)}
+                className="rounded-button border border-gray-200 px-3 py-1.5 text-sm text-gray-800 bg-white focus:border-xhs-pink outline-none"
+              >
+                <option value="All">All</option>
+                {uniquePayoutStatuses.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </select>
+              <button
+                type="button"
+                onClick={openBatchModal}
+                disabled={selectedTaskIds.size === 0 || batchSubmitting}
+                className="ml-auto px-4 py-2 rounded-button bg-xhs-pink text-white text-sm font-medium hover:bg-xhs-rose disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {batchSubmitting ? '执行中...' : '批量通过'}
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-xhs-pink-bg border-b border-xhs-pink-soft">
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 w-12">
+                      <input
+                        type="checkbox"
+                        checked={pendingInFiltered.length > 0 && allPendingSelected}
+                        onChange={toggleSelectAll}
+                        disabled={pendingInFiltered.length === 0 || batchSubmitting}
+                        className="rounded border-gray-300 text-xhs-pink focus:ring-xhs-pink"
+                        aria-label="全选待审核"
+                      />
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">taskId</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">taskNo</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">userId</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">amount</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">riskLevel</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">payoutStatus</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">createdAt</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredList.map((row) => {
+                    const canCheck = row.status === 'PENDING_PAYOUT'
+                    const checked = selectedTaskIds.has(row.taskId)
+                    return (
+                      <tr
+                        key={row.taskId}
+                        className="border-b border-gray-100 hover:bg-xhs-pink-bg/50 transition-colors"
+                      >
+                        <td className="py-3 px-4">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={!canCheck || batchSubmitting}
+                            onChange={() => toggleSelect(row.taskId, row.status)}
+                            className="rounded border-gray-300 text-xhs-pink focus:ring-xhs-pink disabled:opacity-50"
+                            aria-label={`选择 ${row.taskNo}`}
+                          />
+                        </td>
+                        <td className="py-3 px-4 font-mono text-sm text-gray-800">{row.taskId}</td>
+                        <td className="py-3 px-4 text-gray-700">{row.taskNo}</td>
+                        <td className="py-3 px-4 text-gray-600">{row.userId}</td>
+                        <td className="py-3 px-4 text-gray-600">
+                          {formatAmount(row.amount) === '—' ? '—' : `¥${formatAmount(row.amount)}`}
+                        </td>
+                        <td className="py-3 px-4">
+                          {row.riskLevel ? (
+                            <span
+                              className={`inline-flex px-2 py-1 rounded-lg text-xs font-medium ${
+                                RISK_COLORS[row.riskLevel] ?? 'bg-gray-100 text-gray-600'
+                              }`}
+                            >
+                              {row.riskLevel}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-gray-600">{row.payoutStatus ?? '—'}</td>
+                        <td className="py-3 px-4 text-gray-500 text-sm">{formatDate(row.createdAt)}</td>
+                        <td className="py-3 px-4">
+                          <button
+                            type="button"
+                            onClick={() => openDetail(row.taskId)}
+                            disabled={batchSubmitting}
+                            className="text-sm text-xhs-pink hover:text-xhs-rose font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            查看详情
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {filteredList.length === 0 && list.length > 0 && (
+              <div className="py-8 text-center text-sm text-xhs-gray">当前筛选无结果</div>
+            )}
+          </>
         )}
       </div>
 
@@ -193,6 +380,46 @@ export default function RefundWorkbench() {
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 rounded-button bg-gray-800 text-white text-sm shadow-lg">
           {toast}
         </div>
+      )}
+
+      {/* 批量通过弹窗 */}
+      {batchModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/30 z-[45]"
+            onClick={() => !batchSubmitting && setBatchModalOpen(false)}
+            aria-hidden
+          />
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md bg-white rounded-2xl border border-xhs-pink-soft shadow-[0_2px_12px_rgba(254,44,85,0.08)] p-5">
+            <h3 className="text-lg font-semibold text-gray-800 mb-3">批量通过</h3>
+            <p className="text-sm text-xhs-gray mb-3">已选 {Array.from(selectedTaskIds).filter((id) => list.some((r) => r.taskId === id && r.status === 'PENDING_PAYOUT')).length} 条，备注必填</p>
+            <textarea
+              value={batchNote}
+              onChange={(e) => setBatchNote(e.target.value)}
+              placeholder="审核备注"
+              rows={3}
+              className="w-full px-3 py-2 rounded-button border border-gray-200 text-sm focus:border-xhs-pink outline-none resize-none mb-4"
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                disabled={batchSubmitting}
+                onClick={() => setBatchModalOpen(false)}
+                className="px-4 py-2 rounded-button border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={batchSubmitting}
+                onClick={handleBatchApprove}
+                className="px-4 py-2 rounded-button bg-xhs-pink text-white text-sm font-medium hover:bg-xhs-rose disabled:opacity-60"
+              >
+                {batchSubmitting ? '提交中...' : '确认通过'}
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* 详情抽屉 */}
