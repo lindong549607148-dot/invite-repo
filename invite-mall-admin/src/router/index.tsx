@@ -7,6 +7,7 @@ import UserManage from '@/pages/UserManage'
 import TaskManage from '@/pages/TaskManage'
 import TaskDetail from '@/pages/TaskDetail'
 import OrderManage from '@/pages/OrderManage'
+import RefundWorkbench from '@/pages/RefundWorkbench'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
@@ -39,6 +40,7 @@ export const routes = [
       { path: 'tasks', element: <TaskManage /> },
       { path: 'tasks/:taskId', element: <TaskDetail /> },
       { path: 'orders', element: <OrderManage /> },
+      { path: 'workbench/refund', element: <RefundWorkbench /> },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

@@ -11,6 +11,12 @@ export interface TaskDetailHelper {
   orderStatus: string | null
 }
 
+export interface TaskDetailLedger {
+  payoutStatus: string
+  qualifiedAt: string | null
+  payoutAt: string | null
+}
+
 export interface TaskDetail {
   taskId: string
   taskNo: string
@@ -26,6 +32,10 @@ export interface TaskDetail {
     has_pending_review: boolean
     reasons: string[]
   }
+  /** 后台详情返回 */
+  ledger?: TaskDetailLedger | null
+  riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH'
+  riskFlags?: { reasons: string[] }
 }
 
 /** 后台用：GET /api/admin/tasks/detail?taskId= （x-admin-key） */

@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 
 const menus = [
   { path: '/dashboard', label: '仪表盘', icon: '📊' },
+  { path: '/workbench/refund', label: '审核工作台', icon: '✅' },
   { path: '/users', label: '用户管理', icon: '👥' },
   { path: '/tasks', label: '任务管理', icon: '📋' },
   { path: '/orders', label: '订单管理', icon: '🛒' },

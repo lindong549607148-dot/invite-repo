@@ -1,6 +1,6 @@
 import { get, post } from './request'
 
-/** 待审核任务项（与后端 store.tasks 中 PENDING_PAYOUT 一致） */
+/** 待审核任务项（GET /api/admin/refund/list 返回，与后端 store.tasks 中 PENDING_PAYOUT 一致） */
 export interface RefundTaskItem {
   taskId: string
   taskNo: string
@@ -11,6 +11,9 @@ export interface RefundTaskItem {
   createdAt?: string
   qualifiedAt?: string
   payoutAt?: string
+  amount?: number
+  riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH'
+  payoutStatus?: string
 }
 
 /** GET /api/admin/refund/list 返回数组 */
