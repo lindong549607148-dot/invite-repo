@@ -1,5 +1,11 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { refundList, refundApprove, refundReject, type RefundTaskItem } from '@/api/admin'
+import {
+  refundList,
+  refundApprove,
+  refundReject,
+  refundMeta,
+  type RefundTaskItem,
+} from '@/api/admin'
 import { taskDetail, type TaskDetail } from '@/api/taskDetail'
 
 const RISK_COLORS: Record<string, string> = {
@@ -27,6 +33,13 @@ function getDefaultBatchNote(): string {
   return `auto-ok-${yyyy}${mm}${dd}`
 }
 
+function getDefaultRejectNote(): string {
+  const yyyy = new Date().getFullYear()
+  const mm = String(new Date().getMonth() + 1).padStart(2, '0')
+  const dd = String(new Date().getDate()).padStart(2, '0')
+  return `auto-reject-${yyyy}${mm}${dd}`
+}
+
 export default function RefundWorkbench() {
   const [list, setList] = useState<RefundTaskItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,9 +52,19 @@ export default function RefundWorkbench() {
   const [submitting, setSubmitting] = useState(false)
   const [riskLevelFilter, setRiskLevelFilter] = useState<string>('All')
   const [payoutStatusFilter, setPayoutStatusFilter] = useState<string>('All')
+  const [statusFilter, setStatusFilter] = useState<string>('All')
+  const [searchText, setSearchText] = useState('')
+  const [sort, setSort] = useState<'createdAt_desc' | 'createdAt_asc'>('createdAt_desc')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [total, setTotal] = useState(0)
+  const [metaPayoutStatuses, setMetaPayoutStatuses] = useState<string[]>([])
+  const [metaTaskStatuses, setMetaTaskStatuses] = useState<string[]>([])
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
   const [batchModalOpen, setBatchModalOpen] = useState(false)
   const [batchNote, setBatchNote] = useState('')
+  const [batchRejectOpen, setBatchRejectOpen] = useState(false)
+  const [batchRejectNote, setBatchRejectNote] = useState('')
   const [batchSubmitting, setBatchSubmitting] = useState(false)
 
   const showToast = useCallback((msg: string) => {
@@ -51,39 +74,85 @@ export default function RefundWorkbench() {
 
   const loadList = useCallback(() => {
     setLoading(true)
-    refundList()
-      .then((data) => setList(Array.isArray(data) ? data : []))
+    refundList({
+      riskLevel: riskLevelFilter === 'All' ? 'ALL' : (riskLevelFilter as 'LOW' | 'MEDIUM' | 'HIGH'),
+      payoutStatus: payoutStatusFilter === 'All' ? 'ALL' : payoutStatusFilter,
+      status: statusFilter === 'All' ? 'ALL' : statusFilter,
+      q: searchText.trim() || undefined,
+      page,
+      pageSize,
+      sort,
+    })
+      .then((data) => {
+        setList(data.items)
+        setTotal(data.total)
+        setSelectedTaskIds((prev) => {
+          const allowed = new Set(data.items.map((r) => r.taskId))
+          const next = new Set<string>()
+          prev.forEach((id) => {
+            if (allowed.has(id)) next.add(id)
+          })
+          return next
+        })
+      })
       .catch((e) => {
         showToast(e instanceof Error ? e.message : '加载列表失败')
         setList([])
+        setTotal(0)
       })
       .finally(() => setLoading(false))
-  }, [showToast])
+  }, [
+    showToast,
+    riskLevelFilter,
+    payoutStatusFilter,
+    statusFilter,
+    searchText,
+    page,
+    pageSize,
+    sort,
+  ])
 
   useEffect(() => {
     loadList()
   }, [loadList])
 
-  // TODO: switch to server-side filtering when refund/list supports query params
-  const filteredList = useMemo(() => {
-    return list.filter((row) => {
-      if (riskLevelFilter !== 'All' && row.riskLevel !== riskLevelFilter) return false
-      if (payoutStatusFilter !== 'All' && row.payoutStatus !== payoutStatusFilter) return false
-      return true
-    })
-  }, [list, riskLevelFilter, payoutStatusFilter])
+  useEffect(() => {
+    setPage(1)
+  }, [riskLevelFilter, payoutStatusFilter, statusFilter, searchText, sort, pageSize])
+
+  useEffect(() => {
+    refundMeta()
+      .then((data) => {
+        setMetaPayoutStatuses(Array.isArray(data.payoutStatuses) ? data.payoutStatuses : [])
+        setMetaTaskStatuses(Array.isArray(data.taskStatuses) ? data.taskStatuses : [])
+      })
+      .catch(() => {
+        setMetaPayoutStatuses([])
+        setMetaTaskStatuses([])
+      })
+  }, [])
 
   const uniquePayoutStatuses = useMemo(() => {
+    if (metaPayoutStatuses.length) return metaPayoutStatuses
     const set = new Set<string>()
     list.forEach((r) => {
       if (r.payoutStatus) set.add(r.payoutStatus)
     })
     return Array.from(set).sort()
-  }, [list])
+  }, [list, metaPayoutStatuses])
+
+  const uniqueTaskStatuses = useMemo(() => {
+    if (metaTaskStatuses.length) return metaTaskStatuses
+    const set = new Set<string>()
+    list.forEach((r) => {
+      if (r.status) set.add(r.status)
+    })
+    return Array.from(set).sort()
+  }, [list, metaTaskStatuses])
 
   const pendingInFiltered = useMemo(
-    () => filteredList.filter((r) => r.status === 'PENDING_PAYOUT'),
-    [filteredList]
+    () => list.filter((r) => r.status === 'PENDING_PAYOUT'),
+    [list]
   )
   const allPendingSelected =
     pendingInFiltered.length > 0 &&
@@ -127,6 +196,18 @@ export default function RefundWorkbench() {
     setBatchModalOpen(true)
   }
 
+  const openBatchRejectModal = () => {
+    const pendingSelected = Array.from(selectedTaskIds).filter((id) =>
+      list.some((r) => r.taskId === id && r.status === 'PENDING_PAYOUT')
+    )
+    if (pendingSelected.length === 0) {
+      showToast('请至少选择一项待审核任务（仅 PENDING_PAYOUT 可勾选）')
+      return
+    }
+    setBatchRejectNote(getDefaultRejectNote())
+    setBatchRejectOpen(true)
+  }
+
   const handleBatchApprove = async () => {
     const trimmed = batchNote.trim()
     if (!trimmed) {
@@ -163,7 +244,44 @@ export default function RefundWorkbench() {
     } else {
       showToast('批量通过失败，请重试')
     }
-    // TODO: 批量拒绝
+  }
+
+  const handleBatchReject = async () => {
+    const trimmed = batchRejectNote.trim()
+    if (!trimmed) {
+      showToast('请填写批量拒绝备注')
+      return
+    }
+    const ids = Array.from(selectedTaskIds).filter((id) =>
+      list.some((r) => r.taskId === id && r.status === 'PENDING_PAYOUT')
+    )
+    if (ids.length === 0) {
+      showToast('没有可批量拒绝的任务')
+      setBatchRejectOpen(false)
+      return
+    }
+    setBatchSubmitting(true)
+    let okCount = 0
+    let failCount = 0
+    for (const taskId of ids) {
+      try {
+        await refundReject(taskId, trimmed)
+        okCount += 1
+      } catch {
+        failCount += 1
+      }
+    }
+    setBatchSubmitting(false)
+    setBatchRejectOpen(false)
+    setSelectedTaskIds(new Set())
+    loadList()
+    if (failCount === 0) {
+      showToast(`批量拒绝完成：成功 ${okCount} 条`)
+    } else if (okCount > 0) {
+      showToast(`批量拒绝完成：成功 ${okCount} 条，失败 ${failCount} 条`)
+    } else {
+      showToast('批量拒绝失败，请重试')
+    }
   }
 
   const openDetail = (taskId: string) => {
@@ -233,6 +351,9 @@ export default function RefundWorkbench() {
   const riskLevel = detail?.riskLevel ?? ''
   const riskReasons = detail?.riskFlags?.reasons ?? detail?.risk_flags?.reasons ?? []
   const ledger = detail?.ledger
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const canPrev = page > 1
+  const canNext = page < totalPages
 
   return (
     <div className="min-h-full bg-[#f7f8fa]" style={{ minHeight: 'calc(100vh - 2rem)' }}>
@@ -250,8 +371,17 @@ export default function RefundWorkbench() {
           </div>
         ) : list.length === 0 ? (
           <div className="py-16 text-center">
-            <p className="text-xhs-gray">暂无待审核任务</p>
-            <p className="text-sm text-gray-400 mt-1">当有任务进入待结算状态后会出现在这里</p>
+            {riskLevelFilter !== 'All' ||
+            payoutStatusFilter !== 'All' ||
+            statusFilter !== 'All' ||
+            searchText.trim() ? (
+              <p className="text-xhs-gray">当前筛选无结果</p>
+            ) : (
+              <>
+                <p className="text-xhs-gray">暂无待审核任务</p>
+                <p className="text-sm text-gray-400 mt-1">当有任务进入待结算状态后会出现在这里</p>
+              </>
+            )}
           </div>
         ) : (
           <>
@@ -280,6 +410,48 @@ export default function RefundWorkbench() {
                   </option>
                 ))}
               </select>
+              <span className="text-sm text-gray-600 ml-2">status</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="rounded-button border border-gray-200 px-3 py-1.5 text-sm text-gray-800 bg-white focus:border-xhs-pink outline-none"
+              >
+                <option value="All">All</option>
+                {uniqueTaskStatuses.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                placeholder="搜索 taskNo / userId"
+                className="rounded-button border border-gray-200 px-3 py-1.5 text-sm text-gray-800 bg-white focus:border-xhs-pink outline-none w-56"
+              />
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as 'createdAt_desc' | 'createdAt_asc')}
+                className="rounded-button border border-gray-200 px-3 py-1.5 text-sm text-gray-800 bg-white focus:border-xhs-pink outline-none"
+              >
+                <option value="createdAt_desc">createdAt ↓</option>
+                <option value="createdAt_asc">createdAt ↑</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  setRiskLevelFilter('All')
+                  setPayoutStatusFilter('All')
+                  setStatusFilter('All')
+                  setSearchText('')
+                  setSort('createdAt_desc')
+                  setPageSize(20)
+                }}
+                disabled={batchSubmitting}
+                className="px-3 py-2 rounded-button border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+              >
+                重置
+              </button>
               <button
                 type="button"
                 onClick={openBatchModal}
@@ -287,6 +459,14 @@ export default function RefundWorkbench() {
                 className="ml-auto px-4 py-2 rounded-button bg-xhs-pink text-white text-sm font-medium hover:bg-xhs-rose disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {batchSubmitting ? '执行中...' : '批量通过'}
+              </button>
+              <button
+                type="button"
+                onClick={openBatchRejectModal}
+                disabled={selectedTaskIds.size === 0 || batchSubmitting}
+                className="px-4 py-2 rounded-button border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                批量拒绝
               </button>
             </div>
             <div className="overflow-x-auto">
@@ -314,7 +494,7 @@ export default function RefundWorkbench() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredList.map((row) => {
+                  {list.map((row) => {
                     const canCheck = row.status === 'PENDING_PAYOUT'
                     const checked = selectedTaskIds.has(row.taskId)
                     return (
@@ -369,9 +549,42 @@ export default function RefundWorkbench() {
                 </tbody>
               </table>
             </div>
-            {filteredList.length === 0 && list.length > 0 && (
+            {list.length === 0 && (
               <div className="py-8 text-center text-sm text-xhs-gray">当前筛选无结果</div>
             )}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-t border-xhs-pink-soft bg-xhs-pink-bg/40">
+              <div className="text-sm text-gray-600">
+                共 {total} 条，页码 {page} / {totalPages}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={!canPrev || batchSubmitting}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 rounded-button border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                >
+                  上一页
+                </button>
+                <span className="text-sm text-gray-500">{page}</span>
+                <button
+                  type="button"
+                  disabled={!canNext || batchSubmitting}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-3 py-1.5 rounded-button border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                >
+                  下一页
+                </button>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="rounded-button border border-gray-200 px-3 py-1.5 text-sm text-gray-800 bg-white focus:border-xhs-pink outline-none"
+                >
+                  <option value={20}>20 / 页</option>
+                  <option value={50}>50 / 页</option>
+                  <option value={100}>100 / 页</option>
+                </select>
+              </div>
+            </div>
           </>
         )}
       </div>
@@ -416,6 +629,48 @@ export default function RefundWorkbench() {
                 className="px-4 py-2 rounded-button bg-xhs-pink text-white text-sm font-medium hover:bg-xhs-rose disabled:opacity-60"
               >
                 {batchSubmitting ? '提交中...' : '确认通过'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 批量拒绝弹窗 */}
+      {batchRejectOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/30 z-[45]"
+            onClick={() => !batchSubmitting && setBatchRejectOpen(false)}
+            aria-hidden
+          />
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md bg-white rounded-2xl border border-xhs-pink-soft shadow-[0_2px_12px_rgba(254,44,85,0.08)] p-5">
+            <h3 className="text-lg font-semibold text-gray-800 mb-3">批量拒绝</h3>
+            <p className="text-sm text-xhs-gray mb-3">
+              已选 {Array.from(selectedTaskIds).filter((id) => list.some((r) => r.taskId === id && r.status === 'PENDING_PAYOUT')).length} 条，备注必填
+            </p>
+            <textarea
+              value={batchRejectNote}
+              onChange={(e) => setBatchRejectNote(e.target.value)}
+              placeholder="拒绝备注"
+              rows={3}
+              className="w-full px-3 py-2 rounded-button border border-gray-200 text-sm focus:border-xhs-pink outline-none resize-none mb-4"
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                disabled={batchSubmitting}
+                onClick={() => setBatchRejectOpen(false)}
+                className="px-4 py-2 rounded-button border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={batchSubmitting}
+                onClick={handleBatchReject}
+                className="px-4 py-2 rounded-button bg-xhs-pink text-white text-sm font-medium hover:bg-xhs-rose disabled:opacity-60"
+              >
+                {batchSubmitting ? '提交中...' : '确认拒绝'}
               </button>
             </div>
           </div>
