@@ -1,0 +1,15 @@
+node_modules
+dist
+coverage
+.env
+.env.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+.e2e-admin.pids.json
+trace.zip
+playwright-report/
+test-results/
+*.log
+.env.*.local

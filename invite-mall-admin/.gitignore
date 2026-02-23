@@ -1,0 +1,12 @@
+node_modules
+dist
+.env.development.local
+.env.local
+*.local
+tests/.auth
+.e2e-admin.pids.json
+trace.zip
+playwright-report/
+test-results/
+*.log
+.env.*.local
