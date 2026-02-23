@@ -54,9 +54,8 @@ function requireBody(req, res, keys, next) {
 router.get('/refund/list', (req, res, next) => {
   const queryEnabled = hasRefundListQuery(req.query || {});
   const baseList = queryEnabled ? store.tasks : inviteService.getPendingPayoutTasks();
-  const enriched = baseList.map(enrichRefundTask);
   if (!queryEnabled) {
-    return res.json(ok(enriched));
+    return res.json(ok(baseList.map(enrichRefundTask)));
   }
 
   const riskLevel = String(req.query.riskLevel || 'ALL').toUpperCase();
@@ -67,9 +66,16 @@ router.get('/refund/list', (req, res, next) => {
   const page = parsePage(req.query.page, 1);
   const pageSize = parsePageSize(req.query.pageSize, 20);
 
-  let filtered = enriched.filter((task) => {
-    if (riskLevel !== 'ALL' && String(task.riskLevel || '').toUpperCase() !== riskLevel) return false;
-    if (payoutStatus !== 'ALL' && String(task.payoutStatus || '').toUpperCase() !== payoutStatus) return false;
+  let filtered = baseList.filter((task) => {
+    if (riskLevel !== 'ALL') {
+      const level = String((task.riskLevel || payoutLedgerService.computeRisk(task).level) || '').toUpperCase();
+      if (level !== riskLevel) return false;
+    }
+    if (payoutStatus !== 'ALL') {
+      const ledger = payoutLedgerService.getLedgerSummary(task.taskId);
+      const statusVal = String((ledger && ledger.payoutStatus) || '').toUpperCase();
+      if (statusVal !== payoutStatus) return false;
+    }
     if (status !== 'ALL' && String(task.status || '').toUpperCase() !== status) return false;
     if (q) {
       const taskNo = String(task.taskNo || '');
@@ -88,7 +94,7 @@ router.get('/refund/list', (req, res, next) => {
 
   const total = filtered.length;
   const start = (page - 1) * pageSize;
-  const items = filtered.slice(start, start + pageSize);
+  const items = filtered.slice(start, start + pageSize).map(enrichRefundTask);
   return res.json(ok({ items, page, pageSize, total }));
 });
 
@@ -125,7 +131,13 @@ router.post('/refund/approve', (req, res, next) => {
   requireBody(req, res, ['taskId'], () => {
     const { taskId, note } = req.body;
     const rawTask = require('../store/memory').store.tasks.find((t) => t.taskId === taskId);
-    if (rawTask && featureFlags.ENABLE_RISK_BLOCKING) {
+    if (!rawTask) {
+      return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
+    }
+    if (rawTask.status !== 'PENDING_PAYOUT') {
+      return res.json(ok({ alreadyHandled: true, status: rawTask.status }));
+    }
+    if (featureFlags.ENABLE_RISK_BLOCKING) {
       const risk = payoutLedgerService.computeRisk(rawTask);
       if (risk.level === 'HIGH') {
         return res.status(403).json({ code: 4033, msg: 'risk_blocked' });
@@ -143,6 +155,13 @@ router.post('/refund/approve', (req, res, next) => {
 router.post('/refund/reject', (req, res, next) => {
   requireBody(req, res, ['taskId'], () => {
     const { taskId, note } = req.body;
+    const rawTask = require('../store/memory').store.tasks.find((t) => t.taskId === taskId);
+    if (!rawTask) {
+      return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
+    }
+    if (rawTask.status !== 'PENDING_PAYOUT') {
+      return res.json(ok({ alreadyHandled: true, status: rawTask.status }));
+    }
     const task = inviteService.rejectTask(taskId, note);
     if (!task) {
       return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
