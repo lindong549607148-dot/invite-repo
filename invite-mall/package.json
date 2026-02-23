@@ -1,0 +1,32 @@
+{
+  "name": "invite-mall",
+  "version": "1.0.0",
+  "description": "邀请2人助力免单 - 裂变电商后端",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node src/server.js",
+    "start": "node src/server.js",
+    "lint": "eslint .",
+    "test": "jest --runInBand",
+    "e2e:api": "jest --runInBand tests/invite.e2e.test.js tests/risk.e2e.test.js",
+    "seed:invite": "node scripts/seed-invite-flow.js",
+    "verify": "node scripts/verify.js",
+    "verify:serve": "node scripts/verify-serve.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "jest": "^30.2.0",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.2.2"
+  }
+}
