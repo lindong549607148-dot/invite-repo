@@ -7,6 +7,7 @@ const payoutLedgerService = require('../services/payoutLedgerService');
 const featureFlags = require('../config/featureFlags');
 const orderService = require('../services/orderService');
 const { store } = require('../store/memory');
+const funnelService = require('../services/funnelService');
 
 function hasRefundListQuery(query) {
   const keys = ['riskLevel', 'payoutStatus', 'status', 'q', 'page', 'pageSize', 'sort'];
@@ -113,6 +114,10 @@ router.get('/refund/meta', (req, res, next) => {
       riskLevels: ['LOW', 'MEDIUM', 'HIGH'],
     })
   );
+});
+
+router.get('/metrics/funnel', (req, res, next) => {
+  res.json(ok(funnelService.getSummary()));
 });
 
 router.get('/tasks/detail', (req, res, next) => {

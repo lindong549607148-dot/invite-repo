@@ -1,15 +1,9 @@
 const { post, get } = require('../../utils/request.js')
 const { getToken } = require('../../utils/request.js')
+const { track } = require('../../utils/track.js')
 
 function getIdempotencyKey(userId, skuId) {
-  const now = new Date()
-  const y = now.getFullYear()
-  const M = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  const h = String(now.getHours()).padStart(2, '0')
-  const m = String(now.getMinutes()).padStart(2, '0')
-  const s = String(now.getSeconds()).padStart(2, '0')
-  return `order-${userId}-${skuId}-${y}${M}${d}${h}${m}${s}`
+  return 'wxorder_' + userId + '_' + skuId + '_' + Date.now()
 }
 
 Page({
@@ -23,11 +17,13 @@ Page({
   },
 
   onLoad(options) {
+    const ctx = wx.getStorageSync('invite_context') || {}
     const { productId, skuId, qty } = options
     this.setData({
       productId: productId || '',
       skuId: skuId || '',
       qty: parseInt(qty, 10) || 1,
+      inviteContext: ctx,
     })
     if (productId) this.loadProduct(productId)
     if (skuId) this.loadSku(productId, skuId)
@@ -50,6 +46,7 @@ Page({
     const { productId, skuId, qty } = this.data
     const userId = wx.getStorageSync('userId') || 'wx'
     const idempotencyKey = getIdempotencyKey(userId, skuId)
+    track('order_submit', { skuId, qty: Number(qty) })
 
     this.setData({ loading: true })
     post(
@@ -62,6 +59,15 @@ Page({
         if (!orderId) {
           wx.showToast({ title: '下单失败', icon: 'none' })
           return
+        }
+        const ctx = this.data.inviteContext || {}
+        if (ctx.taskNo) {
+          post('/api/tasks/bind-helper', { taskNo: ctx.taskNo }, true)
+            .then((bindRes) => {
+              const taskId = bindRes && bindRes.taskId ? bindRes.taskId : ctx.taskId
+              track('helper_bind_success', { taskId: taskId || '' })
+            })
+            .catch(() => {})
         }
         wx.redirectTo({ url: `/pages/pay/index?orderId=${orderId}` })
       })

@@ -1,4 +1,5 @@
 const { get } = require('../../utils/request.js')
+const { track } = require('../../utils/track.js')
 
 const PLACEHOLDER_IMG = 'https://via.placeholder.com/300x300?text=Product'
 
@@ -9,7 +10,14 @@ Page({
     PLACEHOLDER_IMG: 'https://via.placeholder.com/300x300?text=Product',
   },
 
-  onLoad() {
+  onLoad(options) {
+    if (options && (options.taskNo || options.inviter)) {
+      wx.setStorageSync('invite_context', {
+        taskNo: options.taskNo || '',
+        inviterUserId: options.inviter || options.inviterUserId || '',
+        savedAt: Date.now(),
+      })
+    }
     this.loadList()
   },
 
@@ -29,6 +37,7 @@ Page({
 
   toDetail(e) {
     const id = e.currentTarget.dataset.id
+    track('product_click', { productId: id })
     wx.navigateTo({ url: `/pages/products/detail?id=${id}` })
   },
 

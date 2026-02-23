@@ -1,4 +1,5 @@
 const { post, get } = require('../../utils/request.js')
+const { track } = require('../../utils/track.js')
 
 Page({
   data: {
@@ -28,8 +29,9 @@ Page({
       .then(() => post('/api/pay/notify', { orderId }, true))
       .then(() => {
         wx.showToast({ title: '支付成功', icon: 'success' })
+        track('pay_success', { orderId })
         setTimeout(() => {
-          wx.redirectTo({ url: `/pages/orders/detail?id=${orderId}` })
+          wx.redirectTo({ url: `/pages/orders/detail?orderId=${orderId}` })
         }, 1500)
       })
       .catch(() => {})
