@@ -1,0 +1,37 @@
+<view class="page" wx:if="{{!loading && product}}">
+  <view class="card head">
+    <image class="cover" src="{{product.coverImage || PLACEHOLDER_IMG}}" mode="aspectFill" />
+    <view class="tag-activity">助力免单</view>
+    <text class="title">{{product.title}}</text>
+    <view class="row">
+      <text class="price">¥{{(product.price / 100).toFixed(2)}}</text>
+      <text class="origin" wx:if="{{product.originalPrice}}">¥{{(product.originalPrice / 100).toFixed(2)}}</text>
+    </view>
+  </view>
+
+  <view class="card section">
+    <text class="label">选择规格</text>
+    <view class="skus">
+      <view
+        class="sku-item {{selectedSku && selectedSku.id === item.id ? 'active' : ''}}"
+        wx:for="{{skus}}"
+        wx:key="id"
+        data-sku="{{item}}"
+        bindtap="selectSku"
+      >
+        {{item.skuName || ('规格' + item.id)}}
+      </view>
+    </view>
+  </view>
+
+  <view class="card section">
+    <text class="label">数量</text>
+    <input type="number" value="{{qty}}" min="1" bindinput="qtyChange" class="qty-input" />
+  </view>
+
+  <view class="bottom-bar">
+    <button class="btn-primary btn-big" bindtap="submitOrder">立即下单</button>
+  </view>
+</view>
+<view wx:if="{{loading}}" class="loading">加载中...</view>
+<view wx:elif="{{!product}}" class="empty">商品不存在</view>

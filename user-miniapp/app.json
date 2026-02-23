@@ -1,0 +1,19 @@
+{
+  "pages": [
+    "pages/products/list",
+    "pages/products/detail",
+    "pages/checkout/index",
+    "pages/pay/index",
+    "pages/orders/list",
+    "pages/orders/detail",
+    "pages/tasks/my"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#fff",
+    "navigationBarTitleText": "邀请商城",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7f8fa"
+  },
+  "sitemapLocation": "sitemap.json"
+}

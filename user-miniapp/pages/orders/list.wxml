@@ -1,0 +1,24 @@
+<view class="page">
+  <view class="header">
+    <text class="title">我的订单</text>
+    <view class="nav-btn" bindtap="toProducts">去逛逛</view>
+  </view>
+  <view wx:if="{{loading}}" class="loading">加载中...</view>
+  <view wx:elif="{{list.length === 0}}" class="empty">暂无订单</view>
+  <view wx:else class="list">
+    <view
+      class="card card-item"
+      wx:for="{{list}}"
+      wx:key="orderId"
+      data-id="{{item.orderId}}"
+      bindtap="toDetail"
+    >
+      <view class="row">
+        <text class="orderId">订单 {{item.orderId}}</text>
+        <text class="status {{item.status}}">{{STATUS_MAP[item.status] || item.status}}</text>
+      </view>
+      <view class="row amount">¥{{(item.amount / 100).toFixed(2)}}</view>
+      <view class="row time">{{item.createdAt}}</view>
+    </view>
+  </view>
+</view>

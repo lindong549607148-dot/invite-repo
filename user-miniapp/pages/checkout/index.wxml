@@ -1,0 +1,15 @@
+<view class="page">
+  <view class="card section" wx:if="{{product}}">
+    <text class="label">商品</text>
+    <text class="name">{{product.title}}</text>
+    <text class="sku-name" wx:if="{{sku}}">{{sku.skuName || ('规格 ' + sku.id)}}</text>
+    <text class="price">¥{{sku ? ((sku.price * qty) / 100).toFixed(2) : '0.00'}}</text>
+  </view>
+  <view class="card section">
+    <text class="label">数量</text>
+    <text class="val">{{qty}}</text>
+  </view>
+  <view class="bottom-bar">
+    <button class="btn-primary btn-big" loading="{{loading}}" disabled="{{loading}}" bindtap="createOrder">提交订单</button>
+  </view>
+</view>

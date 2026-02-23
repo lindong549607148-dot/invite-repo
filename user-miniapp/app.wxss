@@ -1,0 +1,31 @@
+/** 小红书风格：粉/白/奶油色、圆角 16、轻阴影、大按钮 */
+page {
+  background-color: #fff8f9;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+}
+
+.card {
+  border-radius: 16rpx;
+  box-shadow: 0 4rpx 24rpx rgba(254, 44, 85, 0.08);
+  background: #fff;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #FE2C55 0%, #FF6B8A 100%);
+  color: #fff;
+  border-radius: 16rpx;
+  font-weight: 600;
+  border: none;
+}
+
+.btn-primary:active {
+  opacity: 0.9;
+}
+
+.tag-activity {
+  background: linear-gradient(135deg, #FFE4E9 0%, #FFF5F7 100%);
+  color: #FE2C55;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+  padding: 4rpx 12rpx;
+}

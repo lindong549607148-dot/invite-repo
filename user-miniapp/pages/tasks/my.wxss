@@ -1,0 +1,8 @@
+.page { padding: 24rpx; }
+.section { padding: 24rpx; margin-bottom: 24rpx; }
+.section .title { font-size: 32rpx; font-weight: 600; color: #333; display: block; margin-bottom: 24rpx; }
+.progress-wrap { margin-bottom: 16rpx; }
+.progress-text { font-size: 26rpx; color: #666; }
+.rule .label { font-size: 28rpx; color: #333; font-weight: 600; display: block; margin-bottom: 12rpx; }
+.rule .desc { font-size: 26rpx; color: #666; line-height: 1.6; }
+.tip { text-align: center; font-size: 24rpx; color: #999; margin-top: 24rpx; }

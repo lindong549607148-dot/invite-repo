@@ -1,0 +1,18 @@
+.page { padding: 24rpx; min-height: 100vh; }
+.header { margin-bottom: 32rpx; display: flex; align-items: center; }
+.title { font-size: 40rpx; font-weight: 700; color: #333; }
+.nav-btn { margin-left: auto; padding: 12rpx 24rpx; background: #FFF5F7; color: #FE2C55; border-radius: 16rpx; font-size: 28rpx; }
+.loading, .empty { text-align: center; padding: 80rpx; color: #999; }
+.list { display: flex; flex-direction: column; gap: 24rpx; }
+.card-item { padding: 24rpx; }
+.card-item .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12rpx; }
+.card-item .row:last-child { margin-bottom: 0; }
+.card-item .orderId { font-size: 28rpx; color: #333; }
+.card-item .status { font-size: 26rpx; padding: 4rpx 12rpx; border-radius: 8rpx; }
+.card-item .status.CREATED { background: #FFF5F7; color: #FE2C55; }
+.card-item .status.PAID { background: #E8F5E9; color: #4CAF50; }
+.card-item .status.SHIPPED { background: #E3F2FD; color: #2196F3; }
+.card-item .status.RECEIVED { background: #E8F5E9; color: #4CAF50; }
+.card-item .status.CLOSED { background: #f5f5f5; color: #999; }
+.card-item .amount { font-size: 34rpx; font-weight: 600; color: #FE2C55; }
+.card-item .time { font-size: 24rpx; color: #999; }

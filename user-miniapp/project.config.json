@@ -1,0 +1,14 @@
+{
+  "description": "邀请商城用户端小程序",
+  "packOptions": { "ignore": [] },
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "minified": true
+  },
+  "compileType": "miniprogram",
+  "libVersion": "2.19.4",
+  "appid": "touristappid",
+  "projectname": "user-miniapp",
+  "condition": {}
+}

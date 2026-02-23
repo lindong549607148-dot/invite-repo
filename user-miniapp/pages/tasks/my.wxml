@@ -1,0 +1,14 @@
+<view class="page">
+  <view class="card section">
+    <text class="title">助力免单进度</text>
+    <view class="progress-wrap">
+      <progress percent="{{progress / target * 100}}" stroke-width="12" backgroundColor="#FFE4E9" activeColor="#FE2C55" />
+    </view>
+    <text class="progress-text">{{progress}} / {{target}} 人已确认收货</text>
+  </view>
+  <view class="card section rule">
+    <text class="label">规则说明</text>
+    <text class="desc">邀请 2 人确认收货后免单。好友下单并确认收货即计入助力进度，达标后系统将自动结算。</text>
+  </view>
+  <view class="tip">（此页为占位，后续接入 tasks/progress 或 tasks/detail）</view>
+</view>
