@@ -21,7 +21,7 @@ export default function Dashboard() {
   }, [])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-h-[200px]">
       <div>
         <h1 className="text-xl font-bold text-gray-800">仪表盘</h1>
         <p className="text-xhs-gray text-sm mt-1">数据概览与快捷入口</p>

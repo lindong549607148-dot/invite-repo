@@ -11,5 +11,5 @@ export interface DashboardStats {
 }
 
 export function fetchDashboardStats() {
-  return get<DashboardStats>('/dashboard/stats')
+  return get<DashboardStats>('/admin/dashboard/stats')
 }

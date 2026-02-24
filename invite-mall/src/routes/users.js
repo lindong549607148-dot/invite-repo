@@ -13,18 +13,26 @@ function requireBody(req, res, keys, next) {
 }
 
 router.post('/login', (req, res, next) => {
-  requireBody(req, res, ['userName'], () => {
-    const result = userService.login(req.body.userName, { phone: req.body.phone });
-    res.json(ok({ userId: result.userId, token: result.token }));
-  });
+  try {
+    requireBody(req, res, ['userName'], () => {
+      const result = userService.login(req.body.userName, { phone: req.body.phone });
+      res.json(ok({ userId: result.userId, token: result.token }));
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get('/me', auth, (req, res, next) => {
-  const data = userService.getMe(req.user.userId);
-  if (!data) {
-    return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
+  try {
+    const data = userService.getMe(req.user.userId);
+    if (!data) {
+      return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
+    }
+    res.json(ok(data));
+  } catch (err) {
+    next(err);
   }
-  res.json(ok(data));
 });
 
 module.exports = router;

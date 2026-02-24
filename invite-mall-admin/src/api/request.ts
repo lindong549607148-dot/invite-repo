@@ -2,7 +2,7 @@ import axios, { type AxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
-const adminKey = import.meta.env.VITE_ADMIN_KEY || ''
+const adminKey = import.meta.env.VITE_ADMIN_KEY || 'dev-admin-key'
 
 export const request = axios.create({
   baseURL,

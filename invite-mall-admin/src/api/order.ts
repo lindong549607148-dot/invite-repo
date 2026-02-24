@@ -17,5 +17,5 @@ export interface OrderListRes {
 }
 
 export function fetchOrderList(params: { page?: number; pageSize?: number; status?: string }) {
-  return get<OrderListRes>('/orders', { params })
+  return get<OrderListRes>('/admin/orders', { params })
 }

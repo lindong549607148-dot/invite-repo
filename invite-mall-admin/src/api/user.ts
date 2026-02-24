@@ -17,9 +17,9 @@ export interface UserListRes {
 }
 
 export function fetchUserList(params: { page?: number; pageSize?: number; keyword?: string }) {
-  return get<UserListRes>('/users', { params })
+  return get<UserListRes>('/admin/users', { params })
 }
 
 export function updateUserStatus(id: string, status: 'normal' | 'disabled') {
-  return post(`/users/${id}/status`, { status })
+  return post(`/admin/users/${id}/status`, { status })
 }

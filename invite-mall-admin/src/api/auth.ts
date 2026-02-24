@@ -11,5 +11,5 @@ export interface LoginRes {
 }
 
 export function login(data: LoginParams) {
-  return post<LoginRes>('/auth/login', data)
+  return post<LoginRes>('/admin/auth/login', data)
 }

@@ -26,19 +26,24 @@ function requireBody(req, res, keys, next) {
 }
 
 router.post('/start', (req, res, next) => {
-  requireBody(req, res, ['orderId'], () => {
-    const userId = req.user.userId;
-    const orderId = req.body.orderId;
-    const result = inviteService.startTask(userId, orderId);
-    if (result.err) {
-      return res.status(400).json(fail(BAD_REQUEST, result.err));
-    }
-    res.json(ok({ taskId: result.task.taskId, taskNo: result.task.taskNo }));
-  });
+  try {
+    requireBody(req, res, ['orderId'], () => {
+      const userId = req.user.userId;
+      const orderId = req.body.orderId;
+      const result = inviteService.startTask(userId, orderId);
+      if (result.err) {
+        return res.status(400).json(fail(BAD_REQUEST, result.err));
+      }
+      res.json(ok({ taskId: result.task.taskId, taskNo: result.task.taskNo }));
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post('/bind-helper', (req, res, next) => {
-  requireBody(req, res, ['taskNo'], () => {
+  try {
+    requireBody(req, res, ['taskNo'], () => {
     const taskNo = req.body.taskNo;
     const helperUserId = req.user.userId;
     const task = inviteService.getTaskByTaskNo(taskNo);
@@ -70,11 +75,15 @@ router.post('/bind-helper', (req, res, next) => {
       }
       res.json(ok({ helpId: result.help.helpId, helperStatus: result.help.helperStatus }));
     });
-  });
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post('/bind-order', (req, res, next) => {
-  requireBody(req, res, ['taskNo', 'orderId'], () => {
+  try {
+    requireBody(req, res, ['taskNo', 'orderId'], () => {
     const { taskNo, orderId } = req.body;
     const helperUserId = req.user.userId;
     const task = inviteService.getTaskByTaskNo(taskNo);
@@ -108,77 +117,93 @@ router.post('/bind-order', (req, res, next) => {
       }
       res.json(ok({ helpId: help.helpId, helperStatus: help.helperStatus }));
     });
-  });
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get('/detail', (req, res, next) => {
-  const taskId = req.query.taskId;
-  if (!taskId) {
-    return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
+  try {
+    const taskId = req.query.taskId;
+    if (!taskId) {
+      return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
+    }
+    const task = store.tasks.find((t) => t.taskId === taskId);
+    if (!task) {
+      return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
+    }
+    if (task.userId !== req.user.userId) {
+      return res.status(403).json(fail(FORBIDDEN, 'forbidden'));
+    }
+    const detail = taskView.buildTaskDetail(taskId);
+    if (!detail) {
+      return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
+    }
+    res.json(ok(detail));
+  } catch (err) {
+    next(err);
   }
-  const task = store.tasks.find((t) => t.taskId === taskId);
-  if (!task) {
-    return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
-  }
-  if (task.userId !== req.user.userId) {
-    return res.status(403).json(fail(FORBIDDEN, 'forbidden'));
-  }
-  const detail = taskView.buildTaskDetail(taskId);
-  if (!detail) {
-    return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
-  }
-  res.json(ok(detail));
 });
 
 router.get('/progress', (req, res, next) => {
-  if (!featureFlags.ENABLE_TASK_PROGRESS_API) {
-    return res.status(403).json({ code: 4030, msg: 'forbidden' });
+  try {
+    if (!featureFlags.ENABLE_TASK_PROGRESS_API) {
+      return res.status(403).json({ code: 4030, msg: 'forbidden' });
+    }
+    const taskId = req.query.taskId;
+    if (!taskId) {
+      return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
+    }
+    const task = store.tasks.find((t) => t.taskId === taskId);
+    if (!task) {
+      return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
+    }
+    if (task.userId !== req.user.userId) {
+      return res.status(403).json(fail(FORBIDDEN, 'forbidden'));
+    }
+    const helps = store.helps.filter((h) => h.taskId === task.taskId);
+    const orderService = require('../services/orderService');
+    const helpers = helps.map((h) => {
+      const order = h.orderId ? orderService.getOrder(h.orderId) : null;
+      return {
+        helperUserId: h.helperUserId,
+        helperOrderId: h.orderId || null,
+        orderStatus: order ? order.status : 'UNBOUND',
+        shippedAt: order ? order.shippedAt || null : null,
+        receivedAt: order ? order.receivedAt || null : null,
+      };
+    });
+    const validCount = helps.filter(
+      (h) => h.status === 'VALID' && h.helperStatus !== HELPER_STATUS.PENDING_REVIEW && h.helperStatus !== HELPER_STATUS.REJECTED
+    ).length;
+    const reasons = Array.isArray(task.riskMarks) ? task.riskMarks.map((m) => m.rule) : [];
+    res.json(ok({
+      taskId: task.taskId,
+      taskNo: task.taskNo,
+      status: task.status,
+      target: task.requiredHelpers,
+      progress: validCount,
+      helpers,
+      qualifiedAt: task.qualifiedAt || null,
+      payoutAt: task.payoutAt || null,
+      riskLevel: computeRiskLevel(task),
+      riskReasons: reasons,
+    }));
+  } catch (err) {
+    next(err);
   }
-  const taskId = req.query.taskId;
-  if (!taskId) {
-    return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
-  }
-  const task = store.tasks.find((t) => t.taskId === taskId);
-  if (!task) {
-    return res.status(400).json(fail(BAD_REQUEST, 'bad_request'));
-  }
-  if (task.userId !== req.user.userId) {
-    return res.status(403).json(fail(FORBIDDEN, 'forbidden'));
-  }
-  const helps = store.helps.filter((h) => h.taskId === task.taskId);
-  const orderService = require('../services/orderService');
-  const helpers = helps.map((h) => {
-    const order = h.orderId ? orderService.getOrder(h.orderId) : null;
-    return {
-      helperUserId: h.helperUserId,
-      helperOrderId: h.orderId || null,
-      orderStatus: order ? order.status : 'UNBOUND',
-      shippedAt: order ? order.shippedAt || null : null,
-      receivedAt: order ? order.receivedAt || null : null,
-    };
-  });
-  const validCount = helps.filter(
-    (h) => h.status === 'VALID' && h.helperStatus !== HELPER_STATUS.PENDING_REVIEW && h.helperStatus !== HELPER_STATUS.REJECTED
-  ).length;
-  const reasons = Array.isArray(task.riskMarks) ? task.riskMarks.map((m) => m.rule) : [];
-  res.json(ok({
-    taskId: task.taskId,
-    taskNo: task.taskNo,
-    status: task.status,
-    target: task.requiredHelpers,
-    progress: validCount,
-    helpers,
-    qualifiedAt: task.qualifiedAt || null,
-    payoutAt: task.payoutAt || null,
-    riskLevel: computeRiskLevel(task),
-    riskReasons: reasons,
-  }));
 });
 
 router.get('/list', (req, res, next) => {
-  const userId = req.user.userId;
-  const list = inviteService.getTaskList(userId);
-  res.json(ok(list));
+  try {
+    const userId = req.user.userId;
+    const list = inviteService.getTaskList(userId);
+    res.json(ok(list));
+  } catch (err) {
+    next(err);
+  }
 });
+
 
 module.exports = router;

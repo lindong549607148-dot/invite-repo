@@ -5,7 +5,7 @@ import { mockUsers, mockTasks, mockOrders, mockDashboardStats, mockRefundList, m
 export function setupMock() {
   const mock = new MockAdapter(request, { delayResponse: 200 })
 
-  mock.onPost('/auth/login').reply((config) => {
+  mock.onPost('/admin/auth/login').reply((config) => {
     const body = JSON.parse(config.data || '{}')
     if (body.username && body.password) {
       return [
@@ -22,9 +22,9 @@ export function setupMock() {
     return [401, { code: 401, message: '用户名或密码错误' }]
   })
 
-  mock.onGet(/\/dashboard\/stats/).reply(200, { code: 0, data: mockDashboardStats })
+  mock.onGet(/\/admin\/dashboard\/stats/).reply(200, { code: 0, data: mockDashboardStats })
 
-  mock.onGet(/\/users/).reply((config) => {
+  mock.onGet(/\/admin\/users/).reply((config) => {
     const params = config.params || {}
     const page = Number(params.page) || 1
     const pageSize = Number(params.pageSize) || 10
@@ -33,9 +33,9 @@ export function setupMock() {
     return [200, { code: 0, data: { list, total: mockUsers.length } }]
   })
 
-  mock.onPost(/\/users\/\w+\/status/).reply(200, { code: 0, data: null })
+  mock.onPost(/\/admin\/users\/\w+\/status/).reply(200, { code: 0, data: null })
 
-  mock.onGet(/\/tasks/).reply((config) => {
+  mock.onGet(/\/admin\/tasks/).reply((config) => {
     const params = config.params || {}
     const page = Number(params.page) || 1
     const pageSize = Number(params.pageSize) || 10
@@ -47,9 +47,9 @@ export function setupMock() {
     return [200, { code: 0, data: { list: slice, total: list.length } }]
   })
 
-  mock.onPost(/\/tasks\/\w+\/status/).reply(200, { code: 0, data: null })
+  mock.onPost(/\/admin\/tasks\/\w+\/status/).reply(200, { code: 0, data: null })
 
-  mock.onGet(/\/orders/).reply((config) => {
+  mock.onGet(/\/admin\/orders/).reply((config) => {
     const params = config.params || {}
     const page = Number(params.page) || 1
     const pageSize = Number(params.pageSize) || 10

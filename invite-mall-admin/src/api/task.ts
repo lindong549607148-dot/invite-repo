@@ -19,9 +19,9 @@ export interface TaskListRes {
 }
 
 export function fetchTaskList(params: { page?: number; pageSize?: number; status?: string }) {
-  return get<TaskListRes>('/tasks', { params })
+  return get<TaskListRes>('/admin/tasks', { params })
 }
 
 export function updateTaskStatus(id: string, status: string) {
-  return post(`/tasks/${id}/status`, { status })
+  return post(`/admin/tasks/${id}/status`, { status })
 }

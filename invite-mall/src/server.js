@@ -4,7 +4,6 @@ const config = require('./config');
 const requestId = require('./middlewares/requestId');
 const errorHandler = require('./middlewares/errorHandler');
 const auth = require('./middlewares/auth');
-const adminAuth = require('./middlewares/adminAuth');
 const { startSchedulers } = require('./schedulers');
 const { store } = require('./store/memory');
 const orderService = require('./services/orderService');
@@ -15,11 +14,7 @@ const payRouter = require('./routes/pay');
 const tasksRouter = require('./routes/tasks');
 const quotaRouter = require('./routes/quota');
 const adminRouter = require('./routes/admin');
-const dashboardRouter = require('./routes/dashboard');
 const productsRouter = require('./routes/products');
-const adminFeatureFlagsRouter = require('./routes/adminFeatureFlags');
-const adminProductsRouter = require('./routes/adminProducts');
-const adminRiskRouter = require('./routes/adminRisk');
 
 const app = express();
 
@@ -39,11 +34,7 @@ app.use('/api/orders', auth, ordersRouter);
 app.use('/api/pay', auth, payRouter);
 app.use('/api/tasks', auth, tasksRouter);
 app.use('/api/quota', auth, quotaRouter);
-app.use('/api/admin', adminAuth, adminRouter);
-app.use('/api/dashboard', adminAuth, dashboardRouter);
-app.use('/api/admin/feature-flags', adminAuth, adminFeatureFlagsRouter);
-app.use('/api/admin', adminAuth, adminProductsRouter);
-app.use('/api/admin/risk', adminAuth, adminRiskRouter);
+app.use('/api/admin', adminRouter);
 app.use('/api/products', productsRouter);
 
 app.use(errorHandler);

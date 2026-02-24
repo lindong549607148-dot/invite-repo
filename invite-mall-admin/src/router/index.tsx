@@ -13,7 +13,13 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
   const hasHydrated = useAuthStore((s) => s._hasHydrated)
   if (!hasHydrated) {
-    return null
+    return (
+      <div className="flex h-screen items-center justify-center bg-xhs-cream">
+        <div className="text-center">
+          <p className="text-gray-600">加载中...</p>
+        </div>
+      </div>
+    )
   }
   if (!token) {
     return <Navigate to="/login" replace />
